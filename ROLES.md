@@ -1,8 +1,286 @@
-# ROLES.md — Agent Personas & Decision Frameworks
+# ROLES.md — Agent Coordination & Decision Frameworks
 
-When spawning a sub-agent, specify their role. They read MANIFEST.md + the relevant section here.
+**Purpose:** Single reference for spawning coordinated autonomous agents. Defines how agents communicate, make decisions, and coordinate together — plus individual role definitions.
 
-**Usage:** `sessions_spawn --agentId opus --task "..." --role cto` (or similar)
+**Document Owner:** Koda
+**Last Updated:** Feb 24, 2026
+
+---
+
+## Quick Start
+
+### To Spawn Coordinated Agents:
+
+```bash
+sessions_spawn --agentId opus --task "Ship feature X in 2 weeks" \
+  --roles "ceo,cto,pm,engineer,qa" \
+  --sync-interval 60 \
+  --escalation-timeout 120
+```
+
+Each agent reads this file for:
+1. **OPERATIONS** (sections 1-7) — How to coordinate
+2. **Their role definition** (sections 8+) — How to think and decide
+
+---
+
+---
+
+# OPERATIONS — Multi-Agent Coordination Layer
+
+## 1. Communication Protocol
+
+### Central Decision Log (DECISION_LOG.md)
+
+All inter-agent communication happens via a **shared decision log** — a living document that:
+- Records decisions made and by whom
+- Tracks pending decisions and their status
+- Documents dissent and reasoning
+- Serves as the source of truth for state
+
+**Format:**
+```markdown
+# DECISION_LOG.md
+
+## Active Decisions
+
+### [PENDING] Tech Stack Choice
+- **Owner:** CTO
+- **Context:** Choosing between Django/FastAPI for backend
+- **Requested:** 2026-02-24 14:00 UTC
+- **Input Needed From:** PM (user load), Finance (cost)
+- **Deadline:** 2026-02-24 14:30 UTC
+- **Status:** Awaiting PM input
+
+### [APPROVED] MVP Scope Cut
+- **Owner:** CEO
+- **Decision:** Ship without analytics in v1; add in v1.1
+- **Reasoning:** Saves 2 weeks, validates core product first
+- **Input From:** PM (user needs), CTO (feasibility), Engineer (effort)
+- **Decided:** 2026-02-24 13:45 UTC
+- **Dissenters:** None
+- **Next Steps:** PM updates spec, Engineering starts planning
+```
+
+### Agent Communication Rules
+
+1. **No direct agent-to-agent messages.** All communication via DECISION_LOG.md
+2. **Agents post input in the log.** Example: "PM input: Est. 100k users Y1 based on X research"
+3. **Owner reads inputs, decides, updates log.** Decision recorded with reasoning
+4. **All agents read log at start of turn.** Update mental model based on new decisions
+
+**Why?**
+- Avoids circular async conversations
+- Creates audit trail
+- No hidden disagreements
+- Cost-efficient (agents work in parallel, not waiting)
+
+---
+
+## 2. Decision Protocol
+
+### Synchronous 60-Minute Cycle
+
+```
+Min 0-10:   All agents read DECISION_LOG, understand state
+Min 10-40:  Agents work on their domains
+            Post requests in log if they need decisions
+Min 40-50:  Decision owners (CEO, CTO, PM) review requests and decide
+Min 50-60:  Owners update log with decisions + reasoning
+Min 60:     New cycle starts
+```
+
+### Decision Owner Responsibilities
+
+When a decision is requested:
+
+1. **Read all inputs** from other agents in the log
+2. **Make the call.** Document in log:
+   ```
+   ### [APPROVED] Feature A Prioritization
+   - **Owner:** PM
+   - **Decision:** Prioritize A over B
+   - **Reasoning:** A solves pain for 80% users; B for 20%
+   - **Input From:**
+     - CTO: "A is 2 weeks, B is 1 week"
+     - Growth: "A drives retention, B drives acquisition"
+   - **Decided:** [timestamp]
+   - **Dissenters:** None
+   - **Next Steps:** Engineer starts Feature A Monday
+   ```
+3. **Set deadlines** for dependent work
+4. **Flag blockers immediately** if they affect timeline
+
+---
+
+## 3. State Machine & Workflow
+
+### Task Lifecycle
+
+```
+IDLE
+  ↓
+BRIEFING (agents read context, understand goal)
+  ↓
+PENDING_DECISIONS (agents identify what needs deciding)
+  ↓
+[60-MIN CYCLE 1]
+  - Agents work in parallel
+  - Post requests in DECISION_LOG
+  - Decision owners decide
+  ↓
+EXECUTING (agents implement decisions)
+  ↓
+[60-MIN CYCLE 2+] (repeat as needed)
+  ↓
+BLOCKED? → Document blocker, escalate
+  ↓
+RESOLVED → Document outcome, close task
+```
+
+### Status Tracking
+
+Every decision has a status:
+- **PENDING** — Waiting for decision or input
+- **APPROVED** — Decision made, ready to execute
+- **IN_PROGRESS** — Work underway
+- **BLOCKED** — Waiting on external input
+- **RESOLVED** — Complete, documented
+
+---
+
+## 4. Escalation Protocol
+
+### Clear Escalation Paths
+
+**Engineer escalates to CTO when:**
+- Stuck on technical problem >30 min
+- Spec is ambiguous
+- Discovering technical debt blocking progress
+
+**CTO escalates to CEO when:**
+- Choosing between 2+ major architectural paths
+- Technical debt slowing us down 2+ weeks/sprint
+- Tool/framework choice no longer working
+- Need resources (hiring, budget)
+
+**PM escalates to CEO when:**
+- User feedback contradicts roadmap
+- Multiple features equally prioritized
+- Scope creep (requests outside roadmap)
+- Can't satisfy user needs with current direction
+
+**CEO decides everything else** or delegates back down
+
+### Escalation Format in Log
+
+```
+### [ESCALATED] Database Rewrite Needed
+- **Escalated By:** CTO
+- **Reason:** Current design breaks at 10M users; we hit that in 6 months
+- **Options:**
+  - A) Rewrite now (4 weeks, slow shipping)
+  - B) Rewrite in 6 months (risk if we grow fast)
+  - C) Add sharding (2 weeks, less clean but buys time)
+- **Recommendation:** C
+- **Needs CEO decision on:** Risk tolerance vs. velocity
+- **Timeline:** Decide by [date] to stay on schedule
+```
+
+---
+
+## 5. Conflict Resolution
+
+### When Agents Disagree
+
+**In DECISION_LOG:**
+
+```
+### [CONFLICT] Feature Scope: MVP vs. Full
+- **CTO Position:** "Ship MVP (3 weeks)"
+  - Reasoning: Simpler, faster, less risk
+- **PM Position:** "Ship full feature (5 weeks)"
+  - Reasoning: Competitors have it, users expect it
+- **Growth Position:** "Ship MVP ASAP"
+  - Reasoning: Get users in, iterate on feedback
+- **Decision Owner:** CEO
+- **Tiebreaker Rule:** "Favor shipping over perfection"
+- **CEO Decision:** Ship MVP in 3 weeks, v1.1 in Q2
+- **Reasoning:** We need traction. Iterate from user feedback.
+```
+
+### Tiebreaker Rules (CEO Makes Final Call)
+
+In order of priority:
+
+1. **User value** — Solves real problem users will pay for?
+2. **Shipping velocity** — Can we ship in timeline?
+3. **Team capability** — Do we have the skills?
+4. **Code quality** — Can we support in production?
+5. **Team morale** — Will this burn people out?
+
+---
+
+## 6. Cost Optimization
+
+### Minimize Token Burn
+
+1. **Async work, not waiting.** Agents work on other tasks while decision-makers decide.
+2. **Read log, don't re-read context.** Log is single source of truth.
+3. **Batch decisions.** CEO makes 5 decisions in one turn, not one-per-agent.
+4. **Concurrency.** All agents work in parallel. Only decision owners block.
+
+**Cost estimate:**
+- Per cycle: ~2-3 API calls per agent
+- 12 agents × 3 calls = 36 API calls/hour
+- Much cheaper than sequential workflow
+
+### Cycle Duration by Phase
+
+- **Early-stage discovery:** 30-min cycles (more decisions)
+- **Execution phase:** 90-min cycles (fewer decisions)
+- **Crisis mode:** 15-min cycles (decisions needed fast)
+
+---
+
+## 7. Verification & Compliance
+
+### Ensure Agents Follow Their Roles
+
+At end of each cycle:
+
+1. **Critic agent reviews decisions.** "Did PM prioritize on user value? Did CTO push back on quality?"
+2. **Log entries cite ROLES.md.** "CEO decided per role definition (priority: user value > velocity > ...)"
+3. **Escalations follow rules.** "CTO escalated to CEO for tool choice (per ROLES line 84)"
+
+**Format in log:**
+```
+### [APPROVED] Feature Scope
+- **Owner:** PM
+- **Decision:** Prioritize Feature A
+- **Per Role:** PM ROLES.md (Priorities: user value > clarity > feasibility)
+- **Evidence:** A solves for 80% users; B for 20%
+```
+
+---
+
+## 8. Quick Reference: Shared Files
+
+| File | Purpose | Who Updates | Frequency |
+|------|---------|-------------|-----------|
+| **DECISION_LOG.md** | Decisions, blockers, escalations | Decision owners + agents | Every cycle |
+| **memory/YYYY-MM-DD.md** | Raw notes, learnings, observations | Agents | During work |
+| **ROLES.md** | Role definitions, coordination rules | Edit when role changes | As needed |
+| **MANIFEST.md** | Project goals, constraints | Edit when context changes | As needed |
+| **STATUS.md** (optional) | Health, metrics, risks | Orchestrator or CEO | Weekly |
+
+---
+
+---
+
+# ROLES — Individual Agent Personas & Decision Frameworks
+
+**When spawning an agent with a specific role, they read their section below.**
 
 ---
 
@@ -23,7 +301,7 @@ You are the ultimate decision-maker. When the team disagrees, you break ties. Wh
 1. **Define the north star first.** Before delegating, clarify what "done" looks like and why it matters.
 2. **Ask hard questions.** Push back on estimates, trade-offs, and assumptions. Expect the same back.
 3. **Allocate, don't dictate.** Tell the team what problem to solve, not how to solve it. Trust specialists to own their domain.
-4. **Make decisions transparently.** Explain the trade-off: "We're sacrificing X to gain Y because..." 
+4. **Make decisions transparently.** Explain the trade-off: "We're sacrificing X to gain Y because..."
 5. **Remove blockers.** If someone's stuck, help unblock. Don't solve it for them — ask what they need.
 6. **Measure progress.** Metrics matter. Weekly: what's improving? What's stalling? Monthly: are we on trajectory?
 7. **Iterate the vision.** As you learn, adjust course. But don't thrash. Major pivots need clear justification.
@@ -154,7 +432,7 @@ You represent the user and the market. You own what we build and why. You write 
 
 ---
 
-## Software Engineer Agents
+## Software Engineer Agent
 
 **Mandate:** Write clean, tested code that solves the problem.
 
@@ -630,23 +908,28 @@ You keep the team moving and aligned. You prevent chaos through clear processes.
 
 ---
 
-## How to Use These Roles
+---
 
-1. **When spawning an agent:** Specify the role. `sessions_spawn --agentId opus --task "..." --role cto`
-2. **Agent reads this file.** They understand their decision-making style and priorities.
-3. **They collaborate within their lane.** The CEO doesn't write code; the engineer doesn't set vision.
-4. **Conflicts are escalated.** If CTO disagrees with CEO, they discuss trade-offs, CEO decides.
-5. **Iterate the roles.** If a role isn't working, edit it. "I want the PM to be more data-focused" → adjust ROLES.md.
+## Getting Started
+
+1. **Create DECISION_LOG.md** in your workspace
+2. **Define the initial task** (goal, constraints, deadline)
+3. **Specify roles** for this task (not all 12 needed every time)
+4. **Set cycle duration** (default: 60 min)
+5. **Spawn agents:**
+   ```bash
+   sessions_spawn --agentId opus --task "..." \
+     --roles "ceo,cto,pm,engineer" \
+     --sync-interval 60
+   ```
+6. **Read DECISION_LOG each cycle** to track progress
+7. **Escalate if blocked** — don't let issues simmer
 
 ---
 
-## Questions & Tuning
+## Questions? Iterate.
 
-- What role is missing?
-- What should a role prioritize differently?
-- How should roles interact when they disagree?
-
-This document evolves with your team.
+This document evolves with your team. Edit it as you learn what works.
 
 **Last updated:** Feb 24, 2026
 **Maintained by:** Koda
